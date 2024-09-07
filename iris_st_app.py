@@ -13,7 +13,7 @@ st.title("Iris Model Prediction Using Pickle File from GitHub")
 iris = load_iris()
 
 # URL of the pickle file hosted on GitHub
-url = 'https://raw.githubusercontent.com/your-username/your-repo-name/main/iris_model.pkl'
+url = 'https://github.com/chiragpalan/test/blob/main/iris_model.pkl'
 
 # Function to load the model from GitHub
 @st.cache_resource
