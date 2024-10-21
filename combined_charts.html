@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined Charts</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        select {
+            margin: 20px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        #chartContainer {
+            margin-top: 20px;
+            width: 100%;
+            height: 80vh;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Select Chart</h1>
+    <select id="chartSelector">
+        <option value="">-- Select a Chart --</option>
+        <option value="nifty_data_predictions.html">Nifty Data Predictions</option>
+        <option value="reliance_data_predictions.html">Reliance Data Predictions</option>
+        <option value="tcs_data_predictions.html">TCS Data Predictions</option>
+    </select>
+
+    <div id="chartContainer">
+        <p>Select a chart from the dropdown above to display it here.</p>
+    </div>
+
+    <script>
+        const chartSelector = document.getElementById('chartSelector');
+        const chartContainer = document.getElementById('chartContainer');
+
+        chartSelector.addEventListener('change', function () {
+            const selectedChart = this.value;
+
+            if (selectedChart) {
+                chartContainer.innerHTML = `<iframe src="${selectedChart}" title="Chart"></iframe>`;
+            } else {
+                chartContainer.innerHTML = "<p>Select a chart from the dropdown above to display it here.</p>";
+            }
+        });
+    </script>
+
+</body>
+</html>
