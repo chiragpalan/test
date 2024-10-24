@@ -3,11 +3,11 @@ import pandas as pd
 import sqlite3
 import os
 
-# Ensure the 'data/' folder exists
-DATA_FOLDER = os.path.join(os.getcwd(), "data")
-os.makedirs(DATA_FOLDER, exist_ok=True)
+# Ensure the 'update_project_plan/' folder exists
+DATA_FOLDER = os.path.join(os.getcwd(), "update_project_plan")
+os.makedirs(DATA_FOLDER, exist_ok=True)  # Create folder if it doesn't exist
 
-# Database path
+# Database path inside 'update_project_plan'
 DATABASE_PATH = os.path.join(DATA_FOLDER, "stock_data.db")
 
 # Connect to the SQLite database
