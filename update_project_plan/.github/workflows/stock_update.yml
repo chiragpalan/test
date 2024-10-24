@@ -1,4 +1,4 @@
-name: Daily Stock Data Update - yaml for update_stock_data.py
+name: Daily Stock Data Update  #yaml for update_stock_data.py
 
 on:
   schedule:
