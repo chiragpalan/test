@@ -2,39 +2,35 @@ name: Daily Stock Data Update
 
 on:
   schedule:
-    # Run every day at 10 PM UTC (adjust to your local time if needed)
-    - cron: '0 16 * * *'  # 10 PM IST = 4:30 PM UTC
-  workflow_dispatch:  # Allows manual trigger  
+    - cron: '0 16 * * *'  # 10 PM IST (4:30 PM UTC)
 
 jobs:
   update:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repository
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      # Step 3: Install dependencies
+      - name: Create data folder (if it doesn't exist)
+        run: mkdir -p data
+
       - name: Install dependencies
         run: |
           pip install yfinance pandas
 
-      # Step 4: Run the script
       - name: Run update_stock_data.py
-        run: python update_stock_data.py
+        run: python scripts/update_stock_data.py
 
-      # Step 5: Upload the updated database
-      - name: Commit and push changes
+      - name: Commit and push updated database
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add stock_data.db
+          git add data/stock_data.db
           git commit -m "Updated stock data at $(date)"
           git push
