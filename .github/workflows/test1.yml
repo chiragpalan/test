@@ -25,7 +25,7 @@ jobs:
         pip install yfinance
 
     - name: Run Python Script
-      run: python fetch_data.py
+      run: python test1.py
 
     - name: Commit and Push Changes
       run: |
