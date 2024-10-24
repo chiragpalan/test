@@ -5,9 +5,9 @@ import os
 
 # Ensure the 'update_project_plan/' folder exists
 DATA_FOLDER = os.path.join(os.getcwd(), "update_project_plan")
-os.makedirs(DATA_FOLDER, exist_ok=True)  # Create folder if it doesn't exist
+os.makedirs(DATA_FOLDER, exist_ok=True)
 
-# Database path inside 'update_project_plan'
+# Database path
 DATABASE_PATH = os.path.join(DATA_FOLDER, "stock_data.db")
 
 # Connect to the SQLite database
@@ -20,6 +20,9 @@ TABLE_NIFTY = "nifty_data"
 TABLE_ASIAN = "asian_data"
 
 def initialize_table(table_name):
+    # Drop and recreate the table to avoid schema conflicts
+    conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+
     create_table_query = f"""
     CREATE TABLE IF NOT EXISTS {table_name} (
         Date TEXT PRIMARY KEY,
@@ -35,7 +38,7 @@ def initialize_table(table_name):
     conn.commit()
 
 def fetch_and_store_data(ticker, table_name):
-    initialize_table(table_name)
+    initialize_table(table_name)  # Ensure correct table schema
 
     query = f"SELECT MAX(Date) FROM {table_name}"
     result = pd.read_sql(query, conn).iloc[0, 0]
@@ -45,6 +48,10 @@ def fetch_and_store_data(ticker, table_name):
 
     if not data.empty:
         data.reset_index(inplace=True)
+        data = data.rename(columns={'Adj Close': 'Adj_Close'})
+        data = data.dropna(subset=['Date'])  # Ensure no NaNs in Date
+
+        print(data.head())  # Debug: Verify the data before inserting
         data.to_sql(table_name, conn, if_exists="append", index=False)
         print(f"Data for {ticker} stored successfully in {table_name}.")
     else:
