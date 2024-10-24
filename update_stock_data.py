@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime, timedelta
 
 # Database path (update to your desired folder)
-DATABASE_PATH = "update_project_plan/stock_data.db"
+DATABASE_PATH = "stock_data.db"
 
 # Connect to the SQLite database
 conn = sqlite3.connect(DATABASE_PATH)
@@ -51,6 +51,7 @@ def fetch_and_store_data(ticker, table_name):
     data = yf.download(ticker, start=start_date)
     if data.empty:
         print(f"No new data available for {ticker}.")
+        print(data.columns)
         return
 
     # Reset the index to have 'Date' as a column
