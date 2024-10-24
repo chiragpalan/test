@@ -4,6 +4,7 @@ on:
   schedule:
     # Run every day at 10 PM UTC (adjust to your local time if needed)
     - cron: '0 16 * * *'  # 10 PM IST = 4:30 PM UTC
+  workflow_dispatch:  # Allows manual trigger  
 
 jobs:
   update:
