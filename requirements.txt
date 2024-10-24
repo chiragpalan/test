@@ -1,5 +1,2 @@
-streamlit
-scikit-learn
+yfinance == 0.2.44
 pandas
-numpy
-requests
