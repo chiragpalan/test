@@ -58,6 +58,7 @@ def fetch_and_store_data(ticker, table_name):
 
     # Rename 'Adj Close' to 'Adj_Close' to match the schema
     data = data.rename(columns={"Adj Close": "Adj_Close"})
+    print(data.columns)
 
     # Append the new data to the database
     data.to_sql(table_name, conn, if_exists="append", index=False)
