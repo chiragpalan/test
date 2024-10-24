@@ -1,65 +1,37 @@
-import yfinance as yf
-import pandas as pd
-import sqlite3
-import os
-
-# Ensure the 'update_project_plan/' folder exists
-DATA_FOLDER = os.path.join(os.getcwd(), "update_project_plan")
-os.makedirs(DATA_FOLDER, exist_ok=True)
-
-# Database path
-DATABASE_PATH = os.path.join(DATA_FOLDER, "stock_data.db")
-
-# Connect to the SQLite database
-conn = sqlite3.connect(DATABASE_PATH)
-
-# Table names
-TABLE_RELIANCE = "reliance_data"
-TABLE_TCS = "tcs_data"
-TABLE_NIFTY = "nifty_data"
-TABLE_ASIAN = "asian_data"
-
-def initialize_table(table_name):
-    # Drop and recreate the table to avoid schema conflicts
-    conn.execute(f"DROP TABLE IF EXISTS {table_name}")
-
-    create_table_query = f"""
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        Date TEXT PRIMARY KEY,
-        Open REAL,
-        High REAL,
-        Low REAL,
-        Close REAL,
-        Adj_Close REAL,
-        Volume INTEGER
-    );
-    """
-    conn.execute(create_table_query)
-    conn.commit()
-
 def fetch_and_store_data(ticker, table_name):
-    initialize_table(table_name)  # Ensure correct table schema
+    initialize_table(table_name)  # Ensure the table schema is correct
 
+    # Fetch the latest available date from the table
     query = f"SELECT MAX(Date) FROM {table_name}"
     result = pd.read_sql(query, conn).iloc[0, 0]
 
+    # Set the start date for fetching new data
     start_date = (pd.to_datetime(result) + pd.Timedelta(days=1)).strftime('%Y-%m-%d') if result else '2019-01-01'
+
+    # Download data from Yahoo Finance
     data = yf.download(ticker, start=start_date)
+    print(f"Downloaded data for {ticker}:")
+    print(data.head())  # Debug: Verify what data was downloaded
 
-    if not data.empty:
-        data.reset_index(inplace=True)
-        data = data.rename(columns={'Adj Close': 'Adj_Close'})
-        data = data.dropna(subset=['Date'])  # Ensure no NaNs in Date
+    # Check if the DataFrame is empty
+    if data.empty:
+        print(f"No new data available for {ticker}.")
+        return
 
-        print(data.head())  # Debug: Verify the data before inserting
-        data.to_sql(table_name, conn, if_exists="append", index=False)
-        print(f"Data for {ticker} stored successfully in {table_name}.")
+    # Ensure 'Date' is a column after resetting the index
+    data.reset_index(inplace=True)
+    print(f"Columns after reset_index: {data.columns}")  # Debug: Check column names
+
+    # Rename columns to match the database schema
+    data = data.rename(columns={'Adj Close': 'Adj_Close'})
+
+    # Drop any rows where 'Date' is NaN
+    if 'Date' in data.columns:
+        data = data.dropna(subset=['Date'])
     else:
-        print(f"No new data for {ticker}.")
+        print(f"Error: 'Date' column not found in data for {ticker}.")
+        return
 
-if __name__ == "__main__":
-    fetch_and_store_data("RELIANCE.NS", TABLE_RELIANCE)
-    fetch_and_store_data("TCS.NS", TABLE_TCS)
-    fetch_and_store_data("^NSEI", TABLE_NIFTY)
-    fetch_and_store_data("ASIANPAINT.NS", TABLE_ASIAN)
-    conn.close()
+    # Insert data into the database
+    data.to_sql(table_name, conn, if_exists="append", index=False)
+    print(f"Data for {ticker} stored successfully in {table_name}.")
