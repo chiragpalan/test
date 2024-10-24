@@ -1,14 +1,10 @@
-import os
 import yfinance as yf
 import pandas as pd
 import sqlite3
+from datetime import datetime, timedelta
 
-# Ensure the folder exists
-# DATA_FOLDER = os.path.join(os.getcwd(), "update_project_plan")
-# os.makedirs(DATA_FOLDER, exist_ok=True)
-
-# Database path
-DATABASE_PATH = "stock_data_v1.db"
+# Database path (update to your desired folder)
+DATABASE_PATH = "update_project_plan/stock_data.db"
 
 # Connect to the SQLite database
 conn = sqlite3.connect(DATABASE_PATH)
@@ -20,9 +16,7 @@ TABLE_NIFTY = "nifty_data"
 TABLE_ASIAN = "asian_data"
 
 def initialize_table(table_name):
-    # Drop and recreate the table to avoid schema conflicts
-    conn.execute(f"DROP TABLE IF EXISTS {table_name}")
-
+    """Create the table if it doesn't exist."""
     create_table_query = f"""
     CREATE TABLE IF NOT EXISTS {table_name} (
         Date TEXT PRIMARY KEY,
@@ -38,27 +32,42 @@ def initialize_table(table_name):
     conn.commit()
 
 def fetch_and_store_data(ticker, table_name):
-    initialize_table(table_name)  # Ensure the table schema is correct
+    """Fetch new data and store it in the database."""
+    # Ensure the table exists
+    initialize_table(table_name)
 
+    # Query the latest date in the database table
     query = f"SELECT MAX(Date) FROM {table_name}"
-    result = pd.read_sql(query, conn).iloc[0, 0]
+    last_date = pd.read_sql(query, conn).iloc[0, 0]
 
-    start_date = (pd.to_datetime(result) + pd.Timedelta(days=1)).strftime('%Y-%m-%d') if result else '2019-01-01'
-    data = yf.download(ticker, start=start_date)
-
-    if not data.empty:
-        data.reset_index(inplace=True)
-        data = data.rename(columns={'Adj Close': 'Adj_Close'})
-        data = data.dropna(subset=['Date'])
-
-        print(f"Inserting data for {ticker} into {table_name}.")
-        data.to_sql(table_name, conn, if_exists="append", index=False)
+    # If there's no data, download 5 years of historical data
+    if last_date is None:
+        start_date = "2019-01-01"
     else:
+        # Start from the next day after the last recorded date
+        start_date = (datetime.strptime(last_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # Download the data from Yahoo Finance
+    data = yf.download(ticker, start=start_date)
+    if data.empty:
         print(f"No new data available for {ticker}.")
+        return
+
+    # Reset the index to have 'Date' as a column
+    data.reset_index(inplace=True)
+
+    # Rename 'Adj Close' to 'Adj_Close' to match the schema
+    data = data.rename(columns={"Adj Close": "Adj_Close"})
+
+    # Append the new data to the database
+    data.to_sql(table_name, conn, if_exists="append", index=False)
+    print(f"New data for {ticker} stored successfully in {table_name}.")
 
 if __name__ == "__main__":
     fetch_and_store_data("RELIANCE.NS", TABLE_RELIANCE)
     fetch_and_store_data("TCS.NS", TABLE_TCS)
     fetch_and_store_data("^NSEI", TABLE_NIFTY)
     fetch_and_store_data("ASIANPAINT.NS", TABLE_ASIAN)
+
+    # Close the database connection
     conn.close()
