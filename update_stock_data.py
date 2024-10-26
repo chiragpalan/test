@@ -1,75 +1,147 @@
-import yfinance as yf
-import pandas as pd
+import os
 import sqlite3
-from datetime import datetime, timedelta
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from xgboost import XGBRegressor
+from sklearn.preprocessing import StandardScaler
+import joblib
+import requests
+import numpy as np
 
-# Database path (update to your desired folder)
-DATABASE_PATH = "stock_data.db"
+# Set paths to the database and output directories
+DATA_DB = 'joined_data.db'  # Local file name after downloading
+MODELS_DIR = 'models'  # Folder to store trained models
+PREDICTIONS_DB = 'data/predictions.db'  # SQLite DB for predictions, stored in the 'data' folder
 
-# Connect to the SQLite database
-conn = sqlite3.connect(DATABASE_PATH)
+# Ensure models and data directories exist
+os.makedirs(MODELS_DIR, exist_ok=True)
+os.makedirs('data', exist_ok=True)  # Ensure the data directory exists
 
-# Table names
-TABLE_RELIANCE = "reliance_data"
-TABLE_TCS = "tcs_data"
-TABLE_NIFTY = "nifty_data"
-TABLE_ASIAN = "asian_data"
-
-def initialize_table(table_name):
-    """Create the table if it doesn't exist."""
-    create_table_query = f"""
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        Date TEXT PRIMARY KEY,
-        Open REAL,
-        High REAL,
-        Low REAL,
-        Close REAL,
-        Adj_Close REAL,
-        Volume INTEGER
-    );
-    """
-    conn.execute(create_table_query)
-    conn.commit()
-
-def fetch_and_store_data(ticker, table_name):
-    """Fetch new data and store it in the database."""
-    # Ensure the table exists
-    initialize_table(table_name)
-
-    # Query the latest date in the database table
-    query = f"SELECT MAX(Date) FROM {table_name}"
-    last_date = pd.read_sql(query, conn).iloc[0, 0]
-
-    # If there's no data, download 5 years of historical data
-    if last_date is None:
-        start_date = "2019-01-01"
+def download_database():
+    """Download the database from GitHub."""
+    url = 'https://raw.githubusercontent.com/chiragpalan/final_project/main/database/joined_data.db'
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(DATA_DB, 'wb') as f:
+            f.write(response.content)
+        print("Database downloaded successfully.")
     else:
-        # Start from the next day after the last recorded date
-        start_date = (datetime.strptime(last_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+        raise Exception("Failed to download the database.")
 
-    # Download the data from Yahoo Finance
-    data = yf.download(ticker, start=start_date)
-    if data.empty:
-        print(f"No new data available for {ticker}.")
-        print(data.columns)
-        return
+def get_table_names(db_path):
+    """Fetch all table names from the SQLite database."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return tables
 
-    # Reset the index to have 'Date' as a column
-    data.reset_index(inplace=True)
+def load_data_from_table(db_path, table_name):
+    """Load data from a specific table."""
+    conn = sqlite3.connect(db_path)
+    df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+    conn.close()
+    return df
 
-    # Rename 'Adj Close' to 'Adj_Close' to match the schema
-    data = data.rename(columns={"Adj Close": "Adj_Close"})
-    print(data.columns)
+def train_model(X_train, y_train, model_type):
+    """Train a regression model based on the model type."""
+    if model_type == 'random_forest':
+        model = RandomForestRegressor()
+    elif model_type == 'gradient_boosting':
+        model = GradientBoostingRegressor()
+    elif model_type == 'xgboost':
+        model = XGBRegressor()
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
+    model.fit(X_train, y_train)
+    return model
 
-    # Append the new data to the database
-    data.to_sql(table_name, conn, if_exists="append", index=False)
-    print(f"New data for {ticker} stored successfully in {table_name}.")
+def save_model(model, table_name, model_type):
+    """Save the trained model to the models directory."""
+    filename = f"{MODELS_DIR}/{table_name}_{model_type}.joblib"
+    joblib.dump(model, filename)
+    print(f"Saved model: {filename}")
+
+def save_predictions_to_db(table_name, predictions_df):
+    """Save predictions and actual values to a new table in the predictions database."""
+    conn = sqlite3.connect(PREDICTIONS_DB)
+
+    # Save to the predictions database, create a new table for each original table
+    predictions_df.to_sql(f'predictions_{table_name}', conn, if_exists='replace', index=False)  # Replace table with new data
+    conn.close()
+    print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
+
+def get_percentiles(model, X):
+    """Get the 5th and 95th percentiles of predictions from the model."""
+    if hasattr(model, 'estimators_'):  # For ensemble models like Random Forest and Gradient Boosting
+        predictions = np.array([tree.predict(X) for tree in model.estimators_])
+        percentiles = np.percentile(predictions, [5, 95], axis=0)  # Axis=0 to get percentiles for each prediction
+    else:  # For single models like XGBoost
+        predictions = model.predict(X)
+        percentiles = np.percentile(predictions, [5, 95])
+    
+    return percentiles
+
+def main():
+    # Download the database
+    download_database()
+
+    # Check if the database exists
+    if not os.path.exists(DATA_DB):
+        raise FileNotFoundError(f"Database not found at {DATA_DB}")
+
+    # Get all table names from the database
+    tables = get_table_names(DATA_DB)
+
+    # Train models and generate predictions for each table
+    for table in tables:
+        print(f"Processing table: {table}")
+        df = load_data_from_table(DATA_DB, table)
+
+        # Drop rows with missing values
+        df = df.dropna()
+
+        # Ensure 'date' is a column (if it's set as index, reset it)
+        if 'date' in df.index.names:
+            df.reset_index(inplace=True)
+
+        # Split into features and target
+        X = df.drop(columns=['Date', 'target_n7d'])  # Replace 'target' with your target column name
+        y = df['target_n7d']  # Replace 'target' with your target column name
+        dates = df['Date']  # Store the dates for predictions
+
+        # Split into train and test sets (random split)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, shuffle=True  # Set shuffle=True for random split
+        )
+
+        # Scale the training data
+        scaler = StandardScaler()  # Initialize the scaler
+        X_train_scaled = scaler.fit_transform(X_train)  # Fit and transform on training data
+
+        # Create a DataFrame to hold actual values
+        predictions_df = pd.DataFrame({'date': dates, 'actual': df['target_n7d']})
+
+        # Train models and get predictions
+        for model_type in ['random_forest', 'gradient_boosting', 'xgboost']:
+            model = train_model(X_train_scaled, y_train, model_type)
+            save_model(model, table, model_type)
+
+            # Predict using the trained model on the entire dataset (train + test)
+            predictions = model.predict(scaler.transform(X))  # Scale the entire dataset for predictions
+
+            # Add predictions to the DataFrame
+            predictions_df[f'predicted_{model_type}'] = predictions
+
+            # Calculate 5th and 95th percentiles of predictions from each model
+            percentiles = get_percentiles(model, scaler.transform(X))
+            predictions_df[f'predicted_{model_type}_5th'] = percentiles[0]
+            predictions_df[f'predicted_{model_type}_95th'] = percentiles[1]
+
+        # Save predictions to a new table in the predictions database
+        save_predictions_to_db(table, predictions_df)
 
 if __name__ == "__main__":
-    fetch_and_store_data("RELIANCE.NS", TABLE_RELIANCE)
-    fetch_and_store_data("TCS.NS", TABLE_TCS)
-    fetch_and_store_data("^NSEI", TABLE_NIFTY)
-    fetch_and_store_data("ASIANPAINT.NS", TABLE_ASIAN)
-
-    # Close the database connection
-    conn.close()
+    main()
