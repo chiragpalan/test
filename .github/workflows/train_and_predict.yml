@@ -11,10 +11,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Download Joined Database
-        run: |
-          curl -L -o database/joined_data.db https://raw.githubusercontent.com/chiragpalan/final_project/main/database/joined_data.db
-
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
