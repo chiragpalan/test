@@ -1,35 +1,38 @@
-name: Update Stock Data
+name: Train and Predict Models
 
 on:
-  schedule:
-    - cron: '30 16 * * *'  # Runs daily at 10 PM IST (16:30 UTC)
-  workflow_dispatch:
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 jobs:
-  update:
+  train-and-predict:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout Final Project Repository
+        uses: actions/checkout@v3
+        with:
+          repository: chiragpalan/final_project  # Your source repo
+          path: final_project_data  # Checkout data here
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: 3.9
+      - name: Checkout Test Repository
+        uses: actions/checkout@v3  # Your destination repo
 
-    - name: Install dependencies
-      run: pip install yfinance pandas
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
 
-    - name: Run stock data update script
-      run: python update_stock_data.py
+      - name: Install Dependencies
+        run: |
+          pip install pandas scikit-learn xgboost joblib
 
-    - name: Commit and push changes
-      run: |
-        git config --local user.name "github-actions[bot]"
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git add update_project_plan/stock_data.db
-        git commit -m "Update stock data"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run Training and Prediction Script
+        run: python train_and_predict.py
+
+      - name: Commit and Push Models and Predictions
+        run: |
+          git config --global user.name "chiragpalan"
+          git config --global user.email "your-email@example.com"
+          git add models/ predictions.db
+          git commit -m "Add trained models and predictions"
+          git push
