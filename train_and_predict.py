@@ -49,9 +49,9 @@ def load_data_from_table(db_path, table_name):
 def train_model(X_train, y_train, model_type):
     """Train a regression model based on the model type."""
     if model_type == 'random_forest':
-        model = RandomForestRegressor()
+        model = RandomForestRegressor(n_estimators=800)
     elif model_type == 'gradient_boosting':
-        model = GradientBoostingRegressor()
+        model = GradientBoostingRegressor(n_estimators=800)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     model.fit(X_train, y_train)
