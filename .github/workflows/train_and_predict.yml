@@ -1,0 +1,42 @@
+name: Train and Predict Models
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  train-and-predict:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repositories
+        uses: actions/checkout@v3
+        with:
+          repository: chiragpalan/final_project
+          path: final_project_data
+
+      - name: Checkout Test Repo
+        uses: actions/checkout@v3
+        with:
+          path: .
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Install Dependencies
+        run: |
+          pip install pandas scikit-learn xgboost joblib
+
+      - name: Run Training and Prediction Script
+        run: python train_and_predict.py
+
+      - name: Commit and Push Predictions
+        run: |
+          git config --global user.name "chiragpalan"
+          git config --global user.email "your-email@example.com"
+          git add predictions.db models/
+          git commit -m "Add predictions and models"
+          git push
