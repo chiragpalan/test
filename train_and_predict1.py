@@ -60,15 +60,17 @@ def save_model(model, table_name, model_type):
 
 def get_percentiles_for_data_points(model, X):
     """Compute 5th and 95th percentiles for each data point."""
-    if hasattr(model, "estimators_"):
-        # For ensemble models like RandomForest and GradientBoosting
+    if isinstance(model, RandomForestRegressor) or isinstance(model, GradientBoostingRegressor):
+        # For ensemble models with `estimators_`
         predictions = np.array([est.predict(X) for est in model.estimators_]).T
     elif isinstance(model, XGBRegressor):
-        # For XGBoost: Extract individual trees
-        predictions = np.array([model.get_booster().predict(X, iteration=i) for i in range(model.n_estimators)]).T
+        # For XGBoost: Get individual tree predictions
+        predictions = np.array(
+            [model.get_booster().predict(X, iteration_range=(i, i + 1)) for i in range(model.n_estimators)]
+        ).T
     else:
         raise ValueError("Model type not supported for percentile extraction.")
-    
+
     p5 = np.percentile(predictions, 5, axis=1)
     p95 = np.percentile(predictions, 95, axis=1)
     return p5, p95
