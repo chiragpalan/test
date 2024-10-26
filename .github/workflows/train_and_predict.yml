@@ -28,6 +28,6 @@ jobs:
         run: |
           git config --global user.name "your-github-username"
           git config --global user.email "your-email@example.com"
-          git add predictions.db models/*
+          git add data/predictions.db models/*
           git commit -m "Update predictions database and trained models" || echo "No changes to commit"
           git push
