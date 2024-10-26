@@ -3,20 +3,18 @@ import sqlite3
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from xgboost import XGBRegressor
 from sklearn.preprocessing import StandardScaler
 import joblib
 import requests
 import numpy as np
 
 # Set paths to the database and output directories
-DATA_DB = 'joined_data.db'  # Local file name after downloading
-MODELS_DIR = 'models'  # Folder to store trained models
-PREDICTIONS_DB = 'data/predictions.db'  # SQLite DB for predictions, stored in the 'data' folder
- 
-# Ensure models and data directories exist
+DATA_DB = 'joined_data.db'
+MODELS_DIR = 'models'
+PREDICTIONS_DB = 'predictions.db'
+
+# Ensure models directory exists
 os.makedirs(MODELS_DIR, exist_ok=True)
-os.makedirs('data', exist_ok=True)  # Ensure the data directory exists
 
 def download_database():
     """Download the database from GitHub."""
@@ -51,8 +49,6 @@ def train_model(X_train, y_train, model_type):
         model = RandomForestRegressor()
     elif model_type == 'gradient_boosting':
         model = GradientBoostingRegressor()
-    elif model_type == 'xgboost':
-        model = XGBRegressor()
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
     model.fit(X_train, y_train)
@@ -67,22 +63,22 @@ def save_model(model, table_name, model_type):
 def save_predictions_to_db(table_name, predictions_df):
     """Save predictions and actual values to a new table in the predictions database."""
     conn = sqlite3.connect(PREDICTIONS_DB)
-
-    # Save to the predictions database, create a new table for each original table
-    predictions_df.to_sql(f'predictions_{table_name}', conn, if_exists='replace', index=False)  # Replace table with new data
+    predictions_df.to_sql(f'predictions_{table_name}', conn, if_exists='replace', index=False)
     conn.close()
     print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
 
-def get_percentiles(model, X):
-    """Get the 5th and 95th percentiles of predictions from the model."""
-    if hasattr(model, 'estimators_'):  # For ensemble models like Random Forest and Gradient Boosting
-        predictions = np.array([tree.predict(X) for tree in model.estimators_])
-        percentiles = np.percentile(predictions, [5, 95], axis=0)  # Axis=0 to get percentiles for each prediction
-    else:  # For single models like XGBoost
-        predictions = model.predict(X)
-        percentiles = np.percentile(predictions, [5, 95])
-    
-    return percentiles
+def get_percentiles_for_data_points(model, X):
+    """Calculate the 5th and 95th percentiles for each data point using weak learners."""
+    if hasattr(model, "estimators_"):
+        # Get predictions from each weak learner (one column per learner)
+        predictions = np.array([tree.predict(X) for tree in model.estimators_]).T  # Shape: (n_samples, n_learners)
+
+        # Calculate 5th and 95th percentiles for each data point (along axis=1)
+        p5 = np.percentile(predictions, 5, axis=1)  # Shape: (n_samples,)
+        p95 = np.percentile(predictions, 95, axis=1)  # Shape: (n_samples,)
+        return p5, p95
+    else:
+        raise ValueError(f"The model does not have weak learners: {type(model)}")
 
 def main():
     # Download the database
@@ -108,37 +104,35 @@ def main():
             df.reset_index(inplace=True)
 
         # Split into features and target
-        X = df.drop(columns=['Date', 'target_n7d'])  # Replace 'target' with your target column name
-        y = df['target_n7d']  # Replace 'target' with your target column name
-        dates = df['Date']  # Store the dates for predictions
+        X = df.drop(columns=['Date', 'target_n7d'])
+        y = df['target_n7d']
+        dates = df['Date']
 
-        # Split into train and test sets (random split)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, shuffle=True  # Set shuffle=True for random split
-        )
+        # Split into train and test sets
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
 
         # Scale the training data
-        scaler = StandardScaler()  # Initialize the scaler
-        X_train_scaled = scaler.fit_transform(X_train)  # Fit and transform on training data
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
 
-        # Create a DataFrame to hold actual values
+        # Create a DataFrame to hold actual values and predictions
         predictions_df = pd.DataFrame({'date': dates, 'actual': df['target_n7d']})
 
         # Train models and get predictions
-        for model_type in ['random_forest', 'gradient_boosting', 'xgboost']:
+        for model_type in ['random_forest', 'gradient_boosting']:
             model = train_model(X_train_scaled, y_train, model_type)
             save_model(model, table, model_type)
 
             # Predict using the trained model on the entire dataset (train + test)
-            predictions = model.predict(scaler.transform(X))  # Scale the entire dataset for predictions
+            predictions = model.predict(scaler.transform(X))
 
             # Add predictions to the DataFrame
             predictions_df[f'predicted_{model_type}'] = predictions
 
-            # Calculate 5th and 95th percentiles of predictions from each model
-            percentiles = get_percentiles(model, scaler.transform(X))
-            predictions_df[f'predicted_{model_type}_5th'] = percentiles[0]
-            predictions_df[f'predicted_{model_type}_95th'] = percentiles[1]
+            # Calculate 5th and 95th percentiles for each data point
+            p5, p95 = get_percentiles_for_data_points(model, scaler.transform(X))
+            predictions_df[f'predicted_{model_type}_5th'] = p5
+            predictions_df[f'predicted_{model_type}_95th'] = p95
 
         # Save predictions to a new table in the predictions database
         save_predictions_to_db(table, predictions_df)
