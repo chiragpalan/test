@@ -24,10 +24,10 @@ jobs:
         run: |
           python train_and_predict.py
 
-      - name: Commit and push predictions database
+      - name: Commit and push predictions database and models
         run: |
           git config --global user.name "your-github-username"
           git config --global user.email "your-email@example.com"
-          git add predictions.db
-          git commit -m "Update predictions database" || echo "No changes to commit"
+          git add predictions.db models/*
+          git commit -m "Update predictions database and trained models" || echo "No changes to commit"
           git push
