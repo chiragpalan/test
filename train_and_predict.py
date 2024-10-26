@@ -1,90 +1,129 @@
-import pandas as pd
+import os
 import sqlite3
-import requests
-from io import BytesIO
+import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from xgboost import XGBRegressor
+from sklearn.preprocessing import StandardScaler
 import joblib
+import requests
 
-def get_database_from_github(url):
-    """Fetch the SQLite database from GitHub as a BytesIO stream."""
+# Set paths to the database and output directories
+DATA_DB = 'joined_data.db'  # Local file name after downloading
+MODELS_DIR = 'models'  # Folder to store trained models
+PREDICTIONS_DB = 'predictions.db'  # SQLite DB for predictions
+
+# Ensure models directory exists
+os.makedirs(MODELS_DIR, exist_ok=True)
+
+def download_database():
+    """Download the database from GitHub."""
+    url = 'https://raw.githubusercontent.com/chiragpalan/final_project/main/database/joined_data.db'
     response = requests.get(url)
-    response.raise_for_status()  # Raise an error for bad responses
-    return BytesIO(response.content)
+    if response.status_code == 200:
+        with open(DATA_DB, 'wb') as f:
+            f.write(response.content)
+        print("Database downloaded successfully.")
+    else:
+        raise Exception("Failed to download the database.")
 
-def get_table_names(conn):
-    """Retrieve all table names from the SQLite database."""
-    query = "SELECT name FROM sqlite_master WHERE type='table';"
-    return pd.read_sql(query, conn)['name'].tolist()
+def get_table_names(db_path):
+    """Fetch all table names from the SQLite database."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return tables
+
+def load_data_from_table(db_path, table_name):
+    """Load data from a specific table."""
+    conn = sqlite3.connect(db_path)
+    df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+    conn.close()
+    return df
+
+def train_model(X_train, y_train, model_type):
+    """Train a regression model based on the model type."""
+    if model_type == 'random_forest':
+        model = RandomForestRegressor()
+    elif model_type == 'gradient_boosting':
+        model = GradientBoostingRegressor()
+    elif model_type == 'xgboost':
+        model = XGBRegressor()
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
+    model.fit(X_train, y_train)
+    return model
+
+def save_model(model, table_name, model_type):
+    """Save the trained model to the models directory."""
+    filename = f"{MODELS_DIR}/{table_name}_{model_type}.joblib"
+    joblib.dump(model, filename)
+    print(f"Saved model: {filename}")
+
+def save_predictions_to_db(table_name, predictions_df):
+    """Save predictions and actual values to a new table in the predictions database."""
+    conn = sqlite3.connect(PREDICTIONS_DB)
+
+    # Save to the predictions database, create a new table for each original table
+    predictions_df.to_sql(f'predictions_{table_name}', conn, if_exists='replace', index=False)  # Replace table with new data
+    conn.close()
+    print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
 
 def main():
-    # URL to the joined_data.db file in your GitHub repository
-    database_url = 'https://raw.githubusercontent.com/chiragpalan/final_project/main/database/joined_data.db'
-    
-    # Get the database from GitHub
-    db_stream = get_database_from_github(database_url)
-    
-    # Connect to the SQLite database using the BytesIO stream
-    conn = sqlite3.connect(db_stream)
-    
-    # Get all table names in the database
-    tables = get_table_names(conn)
+    # Download the database
+    download_database()
 
-    # Iterate through each table in the database
+    # Check if the database exists
+    if not os.path.exists(DATA_DB):
+        raise FileNotFoundError(f"Database not found at {DATA_DB}")
+
+    # Get all table names from the database
+    tables = get_table_names(DATA_DB)
+
+    # Train models and generate predictions for each table
     for table in tables:
-        # Load data from the current table
-        df = pd.read_sql(f'SELECT * FROM {table}', conn)
-        
-        # Drop missing values
+        print(f"Processing table: {table}")
+        df = load_data_from_table(DATA_DB, table)
+
+        # Drop rows with missing values
         df = df.dropna()
-        
-        # Prepare the data (modify this according to your requirements)
-        # Ensure you have a target variable
-        if 'target' not in df.columns:
-            print(f"Target column 'target' not found in {table}. Skipping this table.")
-            continue
-        
-        X = df.drop(columns=['target_n7d'])  # Replace 'target' with your actual target variable
-        y = df['target_n7d']  # Replace with your actual target variable
 
-        # Split the data into train and test sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # Ensure 'date' is a column (if it's set as index, reset it)
+        if 'date' in df.index.names:
+            df.reset_index(inplace=True)
 
-        # Scale the features
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
+        # Split into features and target
+        X = df.drop(columns=['Date', 'target_n7d'])  # Replace 'target' with your target column name
+        y = df['target_n7d']  # Replace with your actual target variable name
+        dates = df['Date']  # Store the dates for predictions
 
-        # Initialize models
-        models = {
-            'RandomForest': RandomForestRegressor(),
-            'GradientBoosting': GradientBoostingRegressor(),
-            'XGBoost': XGBRegressor()
-        }
+        # Split into train and test sets (random split)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, shuffle=True  # Set shuffle=True for random split
+        )
 
-        predictions = {}
+        # Scale the training data
+        scaler = StandardScaler()  # Initialize the scaler
+        X_train_scaled = scaler.fit_transform(X_train)  # Fit and transform on training data
 
-        # Train each model and predict
-        for name, model in models.items():
-            model.fit(X_train, y_train)
-            y_pred = model.predict(X_test)
-            predictions[name] = y_pred
-            
-            # Save the model
-            joblib.dump(model, f'models/{table}_{name}.joblib')
+        # Create a DataFrame to hold actual values
+        predictions_df = pd.DataFrame({'date': dates, 'actual': df['target_n7d']})
 
-        # Store predictions in a DataFrame
-        prediction_df = pd.DataFrame(predictions)
-        prediction_df['actual'] = y_test.values
+        # Train models and get predictions
+        for model_type in ['random_forest', 'gradient_boosting', 'xgboost']:
+            model = train_model(X_train_scaled, y_train, model_type)
+            save_model(model, table, model_type)
 
-        # Save predictions to the predictions database
-        with sqlite3.connect('data/predictions.db') as pred_conn:
-            prediction_df.to_sql(name=table + '_predictions', con=pred_conn, if_exists='replace', index=False)
+            # Predict using the trained model on the entire dataset (train + test)
+            predictions = model.predict(scaler.transform(X))  # Scale the entire dataset for predictions
 
-    # Close the connection
-    conn.close()
+            # Add predictions to the DataFrame
+            predictions_df[f'predicted_{model_type}'] = predictions
+
+        # Save predictions to a new table in the predictions database
+        save_predictions_to_db(table, predictions_df)
 
 if __name__ == "__main__":
     main()
