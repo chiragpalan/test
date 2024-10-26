@@ -22,7 +22,7 @@ jobs:
 
       - name: Run training and prediction script
         run: |
-          python train_and_predict.py
+          python train_and_predict1.py
 
       - name: Commit and push predictions database and models
         run: |
