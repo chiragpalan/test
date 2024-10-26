@@ -4,14 +4,14 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.preprocessing import StandardScaler
+import numpy as np
 import joblib
 import requests
-import numpy as np
 
 # Set paths to the database and output directories
-DATA_DB = 'joined_data.db'
-MODELS_DIR = 'models'
-PREDICTIONS_DB = 'predictions.db'
+DATA_DB = 'joined_data.db'  # Local file name after downloading
+MODELS_DIR = 'models'  # Folder to store trained models
+PREDICTIONS_DB = 'predictions.db'  # SQLite DB for predictions
 
 # Ensure models directory exists
 os.makedirs(MODELS_DIR, exist_ok=True)
@@ -60,25 +60,28 @@ def save_model(model, table_name, model_type):
     joblib.dump(model, filename)
     print(f"Saved model: {filename}")
 
+def get_percentiles_for_data_points(model, X):
+    """Calculate the 5th and 95th percentiles for each data point using weak learners."""
+    if hasattr(model, "estimators_"):
+        if isinstance(model, RandomForestRegressor):
+            predictions = np.array([tree.predict(X) for tree in model.estimators_]).T
+        elif isinstance(model, GradientBoostingRegressor):
+            predictions = np.array([stage.predict(X) for stage in model.estimators_[:, 0]]).T
+        else:
+            raise ValueError(f"Unsupported model type: {type(model)}")
+
+        p5 = np.percentile(predictions, 5, axis=1)  # 5th percentile
+        p95 = np.percentile(predictions, 95, axis=1)  # 95th percentile
+        return p5, p95
+    else:
+        raise ValueError(f"The model does not have weak learners: {type(model)}")
+
 def save_predictions_to_db(table_name, predictions_df):
     """Save predictions and actual values to a new table in the predictions database."""
     conn = sqlite3.connect(PREDICTIONS_DB)
     predictions_df.to_sql(f'predictions_{table_name}', conn, if_exists='replace', index=False)
     conn.close()
     print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
-
-def get_percentiles_for_data_points(model, X):
-    """Calculate the 5th and 95th percentiles for each data point using weak learners."""
-    if hasattr(model, "estimators_"):
-        # Get predictions from each weak learner (one column per learner)
-        predictions = np.array([tree.predict(X) for tree in model.estimators_]).T  # Shape: (n_samples, n_learners)
-
-        # Calculate 5th and 95th percentiles for each data point (along axis=1)
-        p5 = np.percentile(predictions, 5, axis=1)  # Shape: (n_samples,)
-        p95 = np.percentile(predictions, 95, axis=1)  # Shape: (n_samples,)
-        return p5, p95
-    else:
-        raise ValueError(f"The model does not have weak learners: {type(model)}")
 
 def main():
     # Download the database
@@ -104,12 +107,14 @@ def main():
             df.reset_index(inplace=True)
 
         # Split into features and target
-        X = df.drop(columns=['Date', 'target_n7d'])
+        X = df.drop(columns=['Date', 'target_n7d'])  # Adjust columns as needed
         y = df['target_n7d']
         dates = df['Date']
 
-        # Split into train and test sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True)
+        # Split into train and test sets (random split)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, shuffle=True
+        )
 
         # Scale the training data
         scaler = StandardScaler()
@@ -123,18 +128,21 @@ def main():
             model = train_model(X_train_scaled, y_train, model_type)
             save_model(model, table, model_type)
 
-            # Predict using the trained model on the entire dataset (train + test)
-            predictions = model.predict(scaler.transform(X))
+            # Predict on the entire dataset (train + test)
+            X_scaled = scaler.transform(X)
+            predictions = model.predict(X_scaled)
 
             # Add predictions to the DataFrame
             predictions_df[f'predicted_{model_type}'] = predictions
 
-            # Calculate 5th and 95th percentiles for each data point
-            p5, p95 = get_percentiles_for_data_points(model, scaler.transform(X))
+            # Calculate percentiles for each data point
+            p5, p95 = get_percentiles_for_data_points(model, X_scaled)
+
+            # Add percentiles to the DataFrame
             predictions_df[f'predicted_{model_type}_5th'] = p5
             predictions_df[f'predicted_{model_type}_95th'] = p95
 
-        # Save predictions to a new table in the predictions database
+        # Save predictions to the database
         save_predictions_to_db(table, predictions_df)
 
 if __name__ == "__main__":
