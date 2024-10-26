@@ -1,40 +1,33 @@
-name: Train and Predict Models
+name: Train and Predict
 
 on:
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
-  train-and-predict:
-    runs-on: ubuntu-latest
+  run_script:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu environment
 
     steps:
-      - name: Checkout Final Project Repository
-        uses: actions/checkout@v3
-        with:
-          repository: chiragpalan/final_project  # Your source repo
-          path: databse/joined_data.db  # Checkout data here
-
-      - name: Checkout Test Repository
-        uses: actions/checkout@v3  # Your destination repo
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.8'
+          python-version: '3.8'  # Specify the Python version you want to use
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
-          pip install pandas scikit-learn xgboost joblib
+          pip install pandas scikit-learn xgboost joblib requests
 
-      - name: Run Training and Prediction Script
-        run: python train_and_predict.py
-      - name: Set Database Permissions
-        run: chmod +rw final_project_data/database/joined_data.db
-
-      - name: Commit and Push Models and Predictions
+      - name: Run training and prediction script
         run: |
-          git config --global user.name "chiragpalan"
+          python train_and_predict.py
+
+      - name: Commit and push predictions database
+        run: |
+          git config --global user.name "your-github-username"
           git config --global user.email "your-email@example.com"
-          git add models/ predictions.db
-          git commit -m "Add trained models and predictions"
+          git add data/predictions.db
+          git commit -m "Update predictions database" || echo "No changes to commit"
           git push
