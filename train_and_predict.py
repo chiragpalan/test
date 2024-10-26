@@ -75,17 +75,13 @@ def save_predictions_to_db(table_name, predictions_df):
 
 def get_percentiles(model, X):
     """Get the 5th and 95th percentiles of predictions from the model."""
-    if hasattr(model, 'estimators_'):  # For ensemble models like Gradient Boosting
-        predictions = np.array([tree.predict(X) for tree in model.estimators_]).T
-        percentiles = np.percentile(predictions, [5, 95], axis=1)
-    elif hasattr(model, 'booster_'):  # For XGBoost
-        booster = model.get_booster()
-        predictions = booster.predict(xgboost.DMatrix(X))
-        percentiles = np.percentile(predictions, [5, 95])
-    else:
+    if hasattr(model, 'estimators_'):  # For ensemble models like Random Forest and Gradient Boosting
+        predictions = np.array([tree.predict(X) for tree in model.estimators_])
+        percentiles = np.percentile(predictions, [5, 95], axis=0)  # Axis=0 to get percentiles for each prediction
+    else:  # For single models like XGBoost
         predictions = model.predict(X)
         percentiles = np.percentile(predictions, [5, 95])
-
+    
     return percentiles
 
 def main():
