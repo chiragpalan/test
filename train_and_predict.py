@@ -11,10 +11,11 @@ import requests
 # Set paths to the database and output directories
 DATA_DB = 'joined_data.db'  # Local file name after downloading
 MODELS_DIR = 'models'  # Folder to store trained models
-PREDICTIONS_DB = 'predictions.db'  # SQLite DB for predictions
+PREDICTIONS_DB = 'data/predictions.db'  # SQLite DB for predictions, stored in the 'data' folder
 
-# Ensure models directory exists
+# Ensure models and data directories exist
 os.makedirs(MODELS_DIR, exist_ok=True)
+os.makedirs('data', exist_ok=True)  # Ensure the data directory exists
 
 def download_database():
     """Download the database from GitHub."""
