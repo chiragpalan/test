@@ -7,7 +7,7 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 
 # Paths to databases and models directory
-DATA_DB = '../final_project/data/your_database.db'  # Path to source data database
+DATA_DB = '../final_project/database/joined_data.db'  # Path to source data database
 PREDICTIONS_DB = 'predictions.db'  # Local predictions database
 MODELS_DIR = 'models'  # Directory to store trained models
 
