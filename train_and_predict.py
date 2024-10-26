@@ -7,6 +7,7 @@ from xgboost import XGBRegressor
 from sklearn.preprocessing import StandardScaler
 import joblib
 import requests
+import numpy as np
 
 # Set paths to the database and output directories
 DATA_DB = 'joined_data.db'  # Local file name after downloading
@@ -72,6 +73,21 @@ def save_predictions_to_db(table_name, predictions_df):
     conn.close()
     print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
 
+def get_percentiles(model, X, percentiles=[5, 95]):
+    """Get the specified percentiles of predictions from the model."""
+    # Get individual tree predictions
+    if hasattr(model, 'estimators_'):  # For ensemble models like Gradient Boosting
+        predictions = np.array([tree.predict(X) for tree in model.estimators_]).T
+    elif hasattr(model, 'booster_'):  # For XGBoost
+        booster = model.get_booster()
+        predictions = booster.predict(xgboost.DMatrix(X), output_margin=True)
+    else:
+        predictions = model.predict(X).reshape(-1, 1)
+
+    # Calculate percentiles
+    percentile_values = np.percentile(predictions, percentiles, axis=0)
+    return percentile_values
+
 def main():
     # Download the database
     download_database()
@@ -122,6 +138,11 @@ def main():
 
             # Add predictions to the DataFrame
             predictions_df[f'predicted_{model_type}'] = predictions
+
+            # Calculate 5th and 95th percentiles of predictions from each model
+            percentiles = get_percentiles(model, scaler.transform(X))
+            predictions_df[f'predicted_{model_type}_5th'] = percentiles[0]
+            predictions_df[f'predicted_{model_type}_95th'] = percentiles[1]
 
         # Save predictions to a new table in the predictions database
         save_predictions_to_db(table, predictions_df)
