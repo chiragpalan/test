@@ -13,7 +13,7 @@ import numpy as np
 DATA_DB = 'joined_data.db'  # Local file name after downloading
 MODELS_DIR = 'models'  # Folder to store trained models
 PREDICTIONS_DB = 'data/predictions.db'  # SQLite DB for predictions, stored in the 'data' folder
-
+ 
 # Ensure models and data directories exist
 os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs('data', exist_ok=True)  # Ensure the data directory exists
