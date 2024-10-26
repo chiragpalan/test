@@ -28,6 +28,8 @@ jobs:
 
       - name: Run Training and Prediction Script
         run: python train_and_predict.py
+      - name: Set Database Permissions
+        run: chmod +rw final_project_data/database/joined_data.db
 
       - name: Commit and Push Models and Predictions
         run: |
