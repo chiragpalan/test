@@ -96,9 +96,9 @@ def main():
             df.reset_index(inplace=True)
 
         # Split into features and target
-        X = df.drop(columns=['date', 'target'])  # Replace 'target' with your target column name
-        y = df['target']  # Replace 'target' with your target column name
-        dates = df['date']  # Store the dates for predictions
+        X = df.drop(columns=['Date', 'targetn7d'])  # Replace 'target' with your target column name
+        y = df['targetn7d']  # Replace 'target' with your target column name
+        dates = df['Date']  # Store the dates for predictions
 
         # Split into train and test sets (random split)
         X_train, X_test, y_train, y_test = train_test_split(
