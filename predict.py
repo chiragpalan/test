@@ -41,7 +41,7 @@ def main():
             raise KeyError("The 'Date' column is missing from the DataFrame.")
 
         # Store dates and actual values
-        dates = df_test['Date']
+        dates = df_test['date']
         y_actual = df_test['target_n7d']  # Adjust according to your actual target column name
 
         # Prepare predictions DataFrame
