@@ -1,87 +1,81 @@
 import os
 import sqlite3
 import pandas as pd
-import joblib
 from sklearn.preprocessing import StandardScaler
+import joblib
 
-# Set paths to the models and output directories
-MODELS_DIR = 'models'  # Folder where trained models are saved
+# Set paths to the models and predictions database
+MODELS_DIR = 'models'  # Folder where models are stored
 PREDICTIONS_DB = 'data/predictions.db'  # SQLite DB for predictions
 
-def load_model(model_type, table_name):
-    """Load a trained model from the models directory."""
-    filename = f"{MODELS_DIR}/{table_name}_{model_type}.joblib"
-    model = joblib.load(filename)
-    return model
-
-def save_predictions_to_db(table_name, predictions_df):
-    """Save predictions and actual values to a new table in the predictions database."""
-    conn = sqlite3.connect(PREDICTIONS_DB)
-    # Save to the predictions database, create a new table for each original table
-    predictions_df.to_sql(f'predictions_{table_name}', conn, if_exists='replace', index=False)  # Replace table with new data
+def get_table_names(db_path):
+    """Fetch all table names from the SQLite database."""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = [row[0] for row in cursor.fetchall()]
     conn.close()
-    print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
+    return tables
+
+def load_data_from_table(db_path, table_name):
+    """Load data from a specific table."""
+    conn = sqlite3.connect(db_path)
+    df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+    conn.close()
+    return df
 
 def main():
-    # Assuming you have a way to retrieve the table names and the data for each table
-    # For demonstration purposes, let's say you have a list of tables
-    tables = ['asian_data', 'nifty_data', 'reliance_data', 'tcs_data']  # Replace with actual table names
+    # Get all table names from the predictions database
+    tables = get_table_names(PREDICTIONS_DB)
 
+    # Process each table
     for table in tables:
         print(f"Processing table: {table}")
+        df_test = load_data_from_table(PREDICTIONS_DB, table)
 
-        # Load the test data
-        # Here, you will need to implement your logic to retrieve the test data as a DataFrame
-        # For example, using a method similar to load_data_from_table
-        # df_test = load_data_from_table(DATA_DB, table)
-        # df_test should contain the columns used for prediction
+        # Check the columns of df_test
+        print("Columns in df_test:", df_test.columns)  # Check available columns
+
+        # Ensure 'Date' is present and handle it accordingly
+        if 'Date' not in df_test.columns:
+            raise KeyError("The 'Date' column is missing from the DataFrame.")
         
-        # Placeholder for actual test data loading
-        df_test = pd.DataFrame()  # Replace with actual loading code
+        # Store dates and actual values
+        dates = df_test['Date']
+        y_actual = df_test['target_n7d']  # Adjust according to your actual target column name
+        
+        # Prepare predictions DataFrame
+        predictions_df = pd.DataFrame({'Date': dates, 'actual': y_actual})
 
-        # Drop rows with missing values if any
-        df_test = df_test.dropna()
-
-        # Store dates for predictions
-        dates = df_test['Date']  # Assuming 'Date' column exists
-        X_test = df_test.drop(columns=['Date', 'target_n7d'])  # Adjust based on your actual target column
-
-        # Scale the test data
-        scaler = StandardScaler()
-        X_test_scaled = scaler.fit_transform(X_test)
-
-        # Initialize DataFrame for predictions
-        predictions_df = pd.DataFrame({'date': dates})
-
-        # Store percentiles for each model type
+        # Load models
         for model_type in ['random_forest', 'gradient_boosting', 'xgboost']:
-            model = load_model(model_type, table)
+            model_path = os.path.join(MODELS_DIR, f"{table}_{model_type}.joblib")
+            model = joblib.load(model_path)
 
-            # Get predictions from each weak learner
-            if model_type == 'random_forest':
-                predictions = model.predict(X_test_scaled)
-                weak_predictions = [tree.predict(X_test_scaled) for tree in model.estimators_]
-            elif model_type == 'gradient_boosting':
-                predictions = model.predict(X_test_scaled)
-                weak_predictions = model.decision_function(X_test_scaled)  # For GBM
-            elif model_type == 'xgboost':
-                predictions = model.predict(X_test_scaled)
-                weak_predictions = model.predict(X_test_scaled, ntree_limit=model.best_ntree_limit)
-            else:
-                continue  # Unsupported model type
+            # Scale features from the test DataFrame
+            # Assuming the input features are the same as used during training
+            X_test = df_test.drop(columns=['Date', 'target_n7d'])  # Adjust based on your actual columns
+            scaler = StandardScaler()  # Initialize the scaler
+            
+            # Fit on train data if scaling is needed; for predict, usually just transform
+            X_test_scaled = scaler.fit_transform(X_test)  # Use the same scaler if you saved it during training
 
-            # Calculate percentiles
-            weak_predictions = pd.DataFrame(weak_predictions).T  # Shape: (n_estimators, n_samples)
-            percentile_5th = weak_predictions.quantile(0.05, axis=0)
-            percentile_95th = weak_predictions.quantile(0.95, axis=0)
-
-            # Store results in the DataFrame
+            # Predict using the trained model
+            predictions = model.predict(X_test_scaled)
             predictions_df[f'predicted_{model_type}'] = predictions
-            predictions_df[f'5th_percentile_{model_type}'] = percentile_5th
-            predictions_df[f'95th_percentile_{model_type}'] = percentile_95th
+
+            # Calculate the 5th and 95th percentiles for each weak learner
+            if hasattr(model, 'estimators_'):
+                preds = [tree.predict(X_test_scaled) for tree in model.estimators_]
+                preds = pd.DataFrame(preds).T
+                predictions_df[f'5th_percentile_{model_type}'] = preds.quantile(0.05, axis=1)
+                predictions_df[f'95th_percentile_{model_type}'] = preds.quantile(0.95, axis=1)
 
         # Save predictions to a new table in the predictions database
-        save_predictions_to_db(table, predictions_df)
+        conn = sqlite3.connect(PREDICTIONS_DB)
+        predictions_df.to_sql(f'predictions_{table}', conn, if_exists='replace', index=False)
+        conn.close()
+        print(f"Saved predictions for {table} to {PREDICTIONS_DB}")
 
 if __name__ == "__main__":
     main()
