@@ -18,7 +18,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas scikit-learn xgboost joblib requests
+          pip install pandas scikit-learn xgboost joblib
 
       - name: Run prediction script
         run: python predict.py
+
+      - name: Commit and push predictions
+        run: |
+          git config --global user.name "chiragpalan"
+          git config --global user.email "your-email@example.com"
+          git add data/
+          git commit -m "Add predictions database"
+          git push origin HEAD:main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
