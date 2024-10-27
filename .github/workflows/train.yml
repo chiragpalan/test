@@ -18,17 +18,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas scikit-learn xgboost joblib requests
+          pip install pandas scikit-learn xgboost joblib
 
       - name: Run training script
         run: python train.py
 
-      - name: Commit and push models
+      - name: Commit and push changes
         run: |
           git config --global user.name "chiragpalan"
           git config --global user.email "your-email@example.com"
-          git add models/
-          git commit -m "Add trained models"
+          git add -A  # Add all changes, including untracked files
+          git commit -m "Add trained models" || echo "No changes to commit"
           git push origin HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
