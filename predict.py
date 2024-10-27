@@ -37,7 +37,7 @@ def main():
         print("Columns in df_test:", df_test.columns.tolist())  # List the available columns
 
         # Ensure 'Date' is present and handle it accordingly
-        if 'Date' not in df_test.columns:
+        if 'date' not in df_test.columns:
             raise KeyError("The 'Date' column is missing from the DataFrame.")
 
         # Store dates and actual values
