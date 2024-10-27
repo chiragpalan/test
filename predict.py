@@ -7,9 +7,9 @@ import requests
 
 # Set paths
 DB_URL = 'https://raw.githubusercontent.com/chiragpalan/final_project/main/database/joined_data.db'
-DATA_DB = 'joined_data.db'              # Local path to store the downloaded database
-PREDICTIONS_DB = 'data/predictions.db'  # Output predictions database
-MODELS_DIR = 'models'                   # Folder containing trained models
+DATA_DB = 'joined_data.db'
+PREDICTIONS_DB = 'data/predictions.db'
+MODELS_DIR = 'models'
 
 def download_database():
     """Download the joined database from the GitHub repository."""
@@ -46,11 +46,11 @@ def save_predictions_to_db(predictions_df, table_name):
     print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
 
 def extract_predictions_from_estimators(model, X_scaled):
-    """Handle cases where estimators_ may be a list or numpy array."""
+    """Extract predictions from individual estimators and calculate percentiles."""
     all_preds = []
 
-    # Loop through estimators (handle both list and numpy array formats)
-    for est in model.estimators_.ravel():
+    # Loop through each estimator directly (list format)
+    for est in model.estimators_:
         if hasattr(est, 'predict'):
             all_preds.append(est.predict(X_scaled))
         else:
