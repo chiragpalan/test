@@ -33,17 +33,17 @@ def main():
         print(f"Processing table: {table}")
         df_test = load_data_from_table(PREDICTIONS_DB, table)
 
-        # Check the columns of df_test
-        print("Columns in df_test:", df_test.columns)  # Check available columns
+        # Debugging: Check the columns of df_test
+        print("Columns in df_test:", df_test.columns.tolist())  # List the available columns
 
         # Ensure 'Date' is present and handle it accordingly
         if 'Date' not in df_test.columns:
             raise KeyError("The 'Date' column is missing from the DataFrame.")
-        
+
         # Store dates and actual values
         dates = df_test['Date']
         y_actual = df_test['target_n7d']  # Adjust according to your actual target column name
-        
+
         # Prepare predictions DataFrame
         predictions_df = pd.DataFrame({'Date': dates, 'actual': y_actual})
 
@@ -54,7 +54,7 @@ def main():
 
             # Scale features from the test DataFrame
             # Assuming the input features are the same as used during training
-            X_test = df_test.drop(columns=['Date', 'target_n7d'])  # Adjust based on your actual columns
+            X_test = df_test.drop(columns=['Date', 'target_n7d'], errors='ignore')  # Use errors='ignore' to avoid KeyErrors
             scaler = StandardScaler()  # Initialize the scaler
             
             # Fit on train data if scaling is needed; for predict, usually just transform
