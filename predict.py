@@ -43,19 +43,22 @@ def load_data_from_table(db_path, table_name):
     return df
 
 def extract_predictions_from_estimators(model, X_scaled):
-    """Extract predictions from individual estimators and calculate percentiles."""
+    """Extract predictions and calculate percentiles, handling different model structures."""
     all_preds = []
-    
-    for est in model.estimators_:
-        if hasattr(est, 'predict'):
-            all_preds.append(est.predict(X_scaled))
-        else:
-            print(f"Skipping an estimator without 'predict': {type(est)}")
-    
+
+    # Check if model has estimators (like RandomForest or GradientBoosting)
+    if hasattr(model, 'estimators_'):
+        for est in model.estimators_:
+            if hasattr(est, 'predict'):
+                all_preds.append(est.predict(X_scaled))
+            else:
+                print(f"Skipping an estimator without 'predict': {type(est)}")
+
     if not all_preds:
         raise ValueError("No valid estimators with 'predict' method found.")
 
-    all_preds_df = pd.DataFrame(all_preds).T  # Transpose for correct shape
+    # Convert predictions to a DataFrame and calculate percentiles
+    all_preds_df = pd.DataFrame(all_preds).T  # Transpose to match input shape
     p5 = all_preds_df.quantile(0.05, axis=1)
     p95 = all_preds_df.quantile(0.95, axis=1)
     return p5, p95
@@ -98,10 +101,14 @@ def main():
             predictions = model.predict(X_scaled)
             predictions_df[f'Predicted_{model_type}'] = predictions
 
-            if hasattr(model, 'estimators_'):
-                p5, p95 = extract_predictions_from_estimators(model, X_scaled)
-                predictions_df[f'5th_Percentile_{model_type}'] = p5
-                predictions_df[f'95th_Percentile_{model_type}'] = p95
+            # Handle models with or without individual estimators
+            try:
+                if hasattr(model, 'estimators_'):
+                    p5, p95 = extract_predictions_from_estimators(model, X_scaled)
+                    predictions_df[f'5th_Percentile_{model_type}'] = p5
+                    predictions_df[f'95th_Percentile_{model_type}'] = p95
+            except ValueError as e:
+                print(f"Warning: {e} for model {model_type}")
 
         save_predictions_to_db(predictions_df, table)
 
