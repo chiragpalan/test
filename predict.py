@@ -3,10 +3,23 @@ import sqlite3
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import joblib
+import requests
 
-# Set paths to the models and predictions database
-MODELS_DIR = 'models'  # Folder where models are stored
-PREDICTIONS_DB = 'data/predictions.db'  # SQLite DB for predictions
+# Set paths
+DB_URL = 'https://raw.githubusercontent.com/chiragpalan/final_project/main/database/joined_data.db'
+DATA_DB = 'joined_data.db'              # Local path to store the downloaded database
+PREDICTIONS_DB = 'data/predictions.db'  # Output predictions database
+MODELS_DIR = 'models'                   # Folder containing trained models
+
+def download_database():
+    """Download the joined database from the GitHub repository."""
+    response = requests.get(DB_URL)
+    if response.status_code == 200:
+        with open(DATA_DB, 'wb') as f:
+            f.write(response.content)
+        print("Database downloaded successfully.")
+    else:
+        raise Exception("Failed to download the database.")
 
 def get_table_names(db_path):
     """Fetch all table names from the SQLite database."""
@@ -24,61 +37,65 @@ def load_data_from_table(db_path, table_name):
     conn.close()
     return df
 
-def main():
-    # Get all table names from the predictions database
-    tables = get_table_names(PREDICTIONS_DB)
+def save_predictions_to_db(predictions_df, table_name):
+    """Save predictions to the predictions database."""
+    os.makedirs(os.path.dirname(PREDICTIONS_DB), exist_ok=True)  # Ensure 'data/' folder exists
+    conn = sqlite3.connect(PREDICTIONS_DB)
+    predictions_df.to_sql(table_name, conn, if_exists='replace', index=False)
+    conn.close()
+    print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
 
-    # Process each table
+def main():
+    # Download the joined database
+    download_database()
+
+    # Get all table names from the database
+    tables = get_table_names(DATA_DB)
+
+    # Process each table for predictions
     for table in tables:
         print(f"Processing table: {table}")
-        df_test = load_data_from_table(PREDICTIONS_DB, table)
 
-        # Debugging: Check the columns of df_test
-        print("Columns in df_test:", df_test.columns.tolist())
+        # Load the full dataset
+        df = load_data_from_table(DATA_DB, table).dropna()
 
-        # Ensure 'Date' column is present and handle accordingly
-        if 'date' not in df_test.columns:
-            raise KeyError("The 'date' column is missing from the DataFrame.")
+        # Ensure 'Date' column exists
+        if 'Date' not in df.columns:
+            raise KeyError("The 'Date' column is missing from the data.")
 
-        # Store dates and actual values
-        dates = df_test['date']
-        y_actual = df_test['actual']
+        # Prepare features and output columns
+        X = df.drop(columns=['Date', 'target_n7d'], errors='ignore')
+        y_actual = df['target_n7d']
+        dates = df['Date']
 
-        # Prepare predictions DataFrame
-        predictions_df = pd.DataFrame({'date': dates, 'actual': y_actual})
+        # Initialize DataFrame to store predictions
+        predictions_df = pd.DataFrame({'Date': dates, 'Actual': y_actual})
 
-        # Load models and generate predictions
-        table_prefix = table.replace('predictions_', '')  # Adjust table name to match model filenames
+        # Scale the features
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        # Loop through each model type and generate predictions
         for model_type in ['random_forest', 'gradient_boosting', 'xgboost']:
-            model_path = os.path.join(MODELS_DIR, f"{table_prefix}_{model_type}.joblib")
+            model_path = os.path.join(MODELS_DIR, f"{table}_{model_type}.joblib")
+            print(f"Loading model from: {model_path}")
 
-            # Check if the model file exists
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"Model file not found: {model_path}")
 
             model = joblib.load(model_path)
+            predictions = model.predict(X_scaled)
+            predictions_df[f'Predicted_{model_type}'] = predictions
 
-            # Prepare test data for prediction
-            X_test = df_test.drop(columns=['date', 'actual'], errors='ignore')
-            scaler = StandardScaler()
-            X_test_scaled = scaler.fit_transform(X_test)
-
-            # Predict and store results
-            predictions = model.predict(X_test_scaled)
-            predictions_df[f'predicted_{model_type}'] = predictions
-
-            # Calculate 5th and 95th percentiles if the model has multiple estimators
+            # Calculate percentiles for ensemble models
             if hasattr(model, 'estimators_'):
-                preds = [est.predict(X_test_scaled) for est in model.estimators_]
-                preds_df = pd.DataFrame(preds).T
-                predictions_df[f'5th_percentile_{model_type}'] = preds_df.quantile(0.05, axis=1)
-                predictions_df[f'95th_percentile_{model_type}'] = preds_df.quantile(0.95, axis=1)
+                all_preds = [est.predict(X_scaled) for est in model.estimators_]
+                all_preds_df = pd.DataFrame(all_preds).T
+                predictions_df[f'5th_Percentile_{model_type}'] = all_preds_df.quantile(0.05, axis=1)
+                predictions_df[f'95th_Percentile_{model_type}'] = all_preds_df.quantile(0.95, axis=1)
 
-        # Save predictions to a new table in the predictions database
-        conn = sqlite3.connect(PREDICTIONS_DB)
-        predictions_df.to_sql(table, conn, if_exists='replace', index=False)
-        conn.close()
-        print(f"Saved predictions for {table} to {PREDICTIONS_DB}")
+        # Save the predictions DataFrame to the predictions database
+        save_predictions_to_db(predictions_df, table)
 
 if __name__ == "__main__":
     main()
