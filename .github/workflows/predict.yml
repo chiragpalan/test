@@ -1,0 +1,36 @@
+name: Predict with Models
+
+on:
+  workflow_run:
+    workflows: ["Train Models"]  # Trigger after the 'Train Models' workflow
+    types:
+      - completed  # Ensure it runs only after completion of the train workflow
+
+  workflow_dispatch:  # Allow manual triggering from the GitHub interface
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          pip install pandas scikit-learn xgboost joblib requests numpy
+
+      - name: Run prediction script
+        run: |
+          python predict.py  # Generate predictions
+
+      - name: Upload predictions to repository
+        uses: actions/upload-artifact@v3
+        with:
+          name: predictions-db
+          path: data/predictions.db  # Store predictions database as artifacts
