@@ -45,6 +45,24 @@ def save_predictions_to_db(predictions_df, table_name):
     conn.close()
     print(f"Saved predictions for {table_name} to {PREDICTIONS_DB}")
 
+def extract_predictions_from_estimators(model, X_scaled):
+    """Handle cases where estimators_ may be a list or numpy array."""
+    all_preds = []
+
+    # Loop through estimators (handle both list and numpy array formats)
+    for est in model.estimators_.ravel():
+        if hasattr(est, 'predict'):
+            all_preds.append(est.predict(X_scaled))
+        else:
+            raise AttributeError("Estimator object does not support 'predict'.")
+
+    # Convert predictions to DataFrame and return 5th/95th percentiles
+    all_preds_df = pd.DataFrame(all_preds).T
+    return (
+        all_preds_df.quantile(0.05, axis=1),
+        all_preds_df.quantile(0.95, axis=1),
+    )
+
 def main():
     # Download the joined database
     download_database()
@@ -89,10 +107,9 @@ def main():
 
             # Calculate percentiles for ensemble models
             if hasattr(model, 'estimators_'):
-                all_preds = [est.predict(X_scaled) for est in model.estimators_]
-                all_preds_df = pd.DataFrame(all_preds).T
-                predictions_df[f'5th_Percentile_{model_type}'] = all_preds_df.quantile(0.05, axis=1)
-                predictions_df[f'95th_Percentile_{model_type}'] = all_preds_df.quantile(0.95, axis=1)
+                p5, p95 = extract_predictions_from_estimators(model, X_scaled)
+                predictions_df[f'5th_Percentile_{model_type}'] = p5
+                predictions_df[f'95th_Percentile_{model_type}'] = p95
 
         # Save the predictions DataFrame to the predictions database
         save_predictions_to_db(predictions_df, table)
