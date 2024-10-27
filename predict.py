@@ -34,46 +34,49 @@ def main():
         df_test = load_data_from_table(PREDICTIONS_DB, table)
 
         # Debugging: Check the columns of df_test
-        print("Columns in df_test:", df_test.columns.tolist())  # List the available columns
+        print("Columns in df_test:", df_test.columns.tolist())
 
-        # Ensure 'Date' is present and handle it accordingly
+        # Ensure 'Date' column is present and handle accordingly
         if 'date' not in df_test.columns:
-            raise KeyError("The 'Date' column is missing from the DataFrame.")
+            raise KeyError("The 'date' column is missing from the DataFrame.")
 
         # Store dates and actual values
         dates = df_test['date']
-        y_actual = df_test['actual']  # Adjust according to your actual target column name
+        y_actual = df_test['actual']
 
         # Prepare predictions DataFrame
-        predictions_df = pd.DataFrame({'Date': dates, 'actual': y_actual})
+        predictions_df = pd.DataFrame({'date': dates, 'actual': y_actual})
 
-        # Load models
+        # Load models and generate predictions
+        table_prefix = table.replace('predictions_', '')  # Adjust table name to match model filenames
         for model_type in ['random_forest', 'gradient_boosting', 'xgboost']:
-            model_path = os.path.join(MODELS_DIR, f"{table}_{model_type}.joblib")
+            model_path = os.path.join(MODELS_DIR, f"{table_prefix}_{model_type}.joblib")
+
+            # Check if the model file exists
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Model file not found: {model_path}")
+
             model = joblib.load(model_path)
 
-            # Scale features from the test DataFrame
-            # Assuming the input features are the same as used during training
-            X_test = df_test.drop(columns=['Date', 'target_n7d'], errors='ignore')  # Use errors='ignore' to avoid KeyErrors
-            scaler = StandardScaler()  # Initialize the scaler
-            
-            # Fit on train data if scaling is needed; for predict, usually just transform
-            X_test_scaled = scaler.fit_transform(X_test)  # Use the same scaler if you saved it during training
+            # Prepare test data for prediction
+            X_test = df_test.drop(columns=['date', 'actual'], errors='ignore')
+            scaler = StandardScaler()
+            X_test_scaled = scaler.fit_transform(X_test)
 
-            # Predict using the trained model
+            # Predict and store results
             predictions = model.predict(X_test_scaled)
             predictions_df[f'predicted_{model_type}'] = predictions
 
-            # Calculate the 5th and 95th percentiles for each weak learner
+            # Calculate 5th and 95th percentiles if the model has multiple estimators
             if hasattr(model, 'estimators_'):
-                preds = [tree.predict(X_test_scaled) for tree in model.estimators_]
-                preds = pd.DataFrame(preds).T
-                predictions_df[f'5th_percentile_{model_type}'] = preds.quantile(0.05, axis=1)
-                predictions_df[f'95th_percentile_{model_type}'] = preds.quantile(0.95, axis=1)
+                preds = [est.predict(X_test_scaled) for est in model.estimators_]
+                preds_df = pd.DataFrame(preds).T
+                predictions_df[f'5th_percentile_{model_type}'] = preds_df.quantile(0.05, axis=1)
+                predictions_df[f'95th_percentile_{model_type}'] = preds_df.quantile(0.95, axis=1)
 
         # Save predictions to a new table in the predictions database
         conn = sqlite3.connect(PREDICTIONS_DB)
-        predictions_df.to_sql(f'predictions_{table}', conn, if_exists='replace', index=False)
+        predictions_df.to_sql(table, conn, if_exists='replace', index=False)
         conn.close()
         print(f"Saved predictions for {table} to {PREDICTIONS_DB}")
 
