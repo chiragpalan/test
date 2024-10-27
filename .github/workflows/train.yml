@@ -3,7 +3,34 @@ name: Train Models
 on:
   push:
     branches:
-      - main  # Trigger when changes are pushed to the main branch
+      - main  # Trigger when changes are pushed to the main bname: Train Models
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          pip install pandas scikit-learn xgboost joblib requests
+
+      - name: Run training script
+        run: python train.py
+ranch
   workflow_dispatch:  # Allow manual triggering from the GitHub interface
 
 jobs:
