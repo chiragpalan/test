@@ -1,10 +1,6 @@
 name: Predict with Models
 
 on:
-  workflow_run:
-    workflows: ["Train Models"]
-    types:
-      - completed
   workflow_dispatch:
 
 jobs:
