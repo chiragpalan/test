@@ -42,7 +42,7 @@ def main():
 
         # Store dates and actual values
         dates = df_test['date']
-        y_actual = df_test['target_n7d']  # Adjust according to your actual target column name
+        y_actual = df_test['actual']  # Adjust according to your actual target column name
 
         # Prepare predictions DataFrame
         predictions_df = pd.DataFrame({'Date': dates, 'actual': y_actual})
