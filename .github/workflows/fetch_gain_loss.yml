@@ -1,9 +1,10 @@
+
 name: Fetch Top Gainers and Losers
 
 on:
   schedule:
-    # Run every day at 11 PM (Indian Standard Time, which is UTC+5:30)
-    - cron: '17 17 * * *'
+    # Run every day at 11:00 PM IST (17:30 UTC)
+    - cron: '30 17 * * *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -20,7 +21,9 @@ jobs:
         python-version: '3.8'
 
     - name: Install Dependencies
-      run: pip install nsetools
+      run: |
+        pip install nsepython
+        pip install beautifulsoup4 requests
 
     - name: Run Script
       run: python fetch_gain_loss.py
