@@ -1,0 +1,32 @@
+name: Fetch Top Gainers and Losers
+
+on:
+  schedule:
+    # Run every day at 11 PM (Indian Standard Time, which is UTC+5:30)
+    - cron: '17 17 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  fetch_gain_loss:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+
+    - name: Install Dependencies
+      run: pip install nsetools
+
+    - name: Run Script
+      run: python fetch_gain_loss.py
+
+    - name: Upload SQLite Database
+      uses: actions/upload-artifact@v3
+      with:
+        name: gain_loos.db
+        path: gain_loos.db
