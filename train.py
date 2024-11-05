@@ -49,9 +49,18 @@ def check_and_clean_data(X):
     return X
 
 def train_random_forest(X_train, y_train, table_name):
-    model = RandomForestRegressor(n_estimators=800, random_state=42)
-    model.fit(X_train, y_train)
-    save_model(model, table_name, 'random_forest')
+    # Hyperparameter tuning for Random Forest
+    param_grid = {
+        'n_estimators': [200, 400, 600, 800],
+        'max_depth': [None, 5, 10, 15],
+        'min_samples_split': [2, 5, 10],
+        'min_samples_leaf': [1, 2, 4]
+    }
+    model = RandomForestRegressor(random_state=42)
+    grid_search = GridSearchCV(model, param_grid, cv=5, n_jobs=-1, verbose=1)
+    grid_search.fit(X_train, y_train)
+    best_model = grid_search.best_estimator_
+    save_model(best_model, table_name, 'random_forest')
 
 def train_gradient_boosting(X_train, y_train, table_name):
     # Hyperparameter tuning for Gradient Boosting
