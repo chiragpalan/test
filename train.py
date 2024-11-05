@@ -49,17 +49,17 @@ def check_and_clean_data(X):
     return X
 
 def train_random_forest(X_train, y_train, table_name):
-    model = RandomForestRegressor(n_estimators=800)
+    model = RandomForestRegressor(n_estimators=800, random_state=42)
     model.fit(X_train, y_train)
     save_model(model, table_name, 'random_forest')
 
 def train_gradient_boosting(X_train, y_train, table_name):
-    model = GradientBoostingRegressor(n_estimators=800)
+    model = GradientBoostingRegressor(n_estimators=800, random_state=42)
     model.fit(X_train, y_train)
     save_model(model, table_name, 'gradient_boosting')
 
 def train_xgboost(X_train, y_train, table_name):
-    model = XGBRegressor(n_estimators=800)
+    model = XGBRegressor(n_estimators=800,random_state=42)
     model.fit(X_train, y_train)
     save_model(model, table_name, 'xgboost')
 
