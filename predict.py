@@ -63,7 +63,7 @@ def random_forest_predictions(model, X_scaled):
     return main_prediction, p5, p95
 
 def xgboost_predictions(model, X_scaled):
-    # Convert X to DMatrix format for XGBoost compatibility
+   # Convert X to DMatrix format for XGBoost compatibility
     dmatrix = xgb.DMatrix(X_scaled)
 
     # Get contributions from each tree for each sample
@@ -75,9 +75,13 @@ def xgboost_predictions(model, X_scaled):
     # Compute predictions from each individual tree (no cumulative effect)
     individual_predictions = np.cumsum(individual_tree_contributions, axis=1)
 
+    p5 = np.percentile(individual_predictions, 5, axis=1)
+    p95 = np.percentile(individual_predictions, 95, axis=1)
+
     main_prediction = model.predict(X_scaled)
-    p5 = np.percentile(individual_predictions, 5)
-    p95 = np.percentile(individual_predictions, 95)
+    # p5, p95 = extract_percentiles(all_preds)
+    # p5 = np.percentile(main_prediction, 5)
+    # p95 = np.percentile(main_prediction, 95)
     return main_prediction, p5, p95
 
 def gradient_boosting_predictions(model, X_scaled):
