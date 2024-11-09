@@ -50,6 +50,7 @@ def check_and_clean_data(X):
 
 def train_random_forest(X_train, y_train, table_name):
     # Hyperparameter tuning for Random Forest
+    print("Training Random Forest model")
     param_grid = {
         'n_estimators': [200, 400, 600, 800],
         'max_depth': [None, 5, 10, 15],
@@ -63,6 +64,7 @@ def train_random_forest(X_train, y_train, table_name):
     save_model(best_model, table_name, 'random_forest')
 
 def train_gradient_boosting(X_train, y_train, table_name):
+     print("Training Gradient Boosting model")
     # Hyperparameter tuning for Gradient Boosting
     param_grid = {
         'n_estimators': [200, 400, 600, 800],
@@ -77,6 +79,7 @@ def train_gradient_boosting(X_train, y_train, table_name):
     save_model(best_model, table_name, 'gradient_boosting')
 
 def train_xgboost(X_train, y_train, table_name):
+     print("Training XGB model")
     # Hyperparameter tuning for XGBoost
     param_grid = {
         'n_estimators': [200, 400, 600, 800],
