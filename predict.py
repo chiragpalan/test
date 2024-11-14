@@ -46,7 +46,7 @@ def clean_data(X, y, dates):
     """Remove rows with NaN or infinite values from a NumPy array and keep data aligned."""
     mask = np.isfinite(X).all(axis=1)  # Identify rows without NaN or inf
     X_clean = X[mask]
-    y_clean = y[mask].reset_index(drop=True)
+    y_clean = y.reset_index(drop=True)
     dates_clean = dates[mask].reset_index(drop=True)
     return X_clean, y_clean, dates_clean
 
