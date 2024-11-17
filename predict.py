@@ -1,3 +1,5 @@
+#Prediction code - modified with shift in datapoints
+
 import os
 import sqlite3
 import pandas as pd
@@ -105,21 +107,6 @@ def save_predictions_to_db(predictions_df, prediction_table_name):
     except Exception as e:
         print(f"Error while saving to database: {e}")
 
-def get_latest_prediction(table):
-    # Connect to predictions_v1.db
-    conn = sqlite3.connect(PREDICTIONS_DB)
-    query = f"SELECT * FROM prediction_{table} ORDER BY Date DESC LIMIT 1"
-    df = pd.read_sql_query(query, conn)
-    conn.close()
-
-    if df.empty:
-        print(f"No predictions found for {table}.")
-        return None
-    else:
-        print(f"Latest prediction for {table}:")
-        print(df)
-        return df
-
 def process_table(table):
     df = load_data_from_table(DATA_DB, table)  # Drop rows with NaN in the DataFrame
     df = df.dropna(subset=[col for col in df.columns if col != 'target_n7d'])
@@ -193,7 +180,7 @@ def sort_and_shift_tables():
 
         # Sort by Date
         df['Date'] = pd.to_datetime(df['Date'])
-        df = df.sort_values(by='Date', ascending=False)
+        df = df.sort_values(by='Date', ascending = False)
 
         # Shift rows up by 7 units, keeping the 'Date' column as is
         df_shifted = df.shift(-7)
@@ -212,11 +199,6 @@ def main():
     for table in tables:
         try:
             process_table(table)
-            
-            # Fetch and print the latest prediction after processing the table
-            latest_prediction = get_latest_prediction(table)
-            if latest_prediction is not None:
-                print(f"Latest prediction for {table}: {latest_prediction}")
         except Exception as e:
             print(f"Error processing table {table}: {e}")
 
