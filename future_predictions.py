@@ -9,7 +9,7 @@ import requests
 
 # Paths and configurations
 DATA_DB = 'joined_data.db'
-PREDICTIONS_DB = 'future_predictions.db'
+PREDICTIONS_DB = 'data/future_predictions.db'
 MODELS_DIR = 'models_v1'
 GITHUB_REPO_URL = 'https://raw.githubusercontent.com/chiragpalan/final_project/main/database/joined_data.db'
 
