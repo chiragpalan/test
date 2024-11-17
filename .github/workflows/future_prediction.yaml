@@ -1,5 +1,4 @@
-name: Predictions Workflow
-
+name: Predictions for future
 on:
   workflow_dispatch:  # Manual trigger
   push:
