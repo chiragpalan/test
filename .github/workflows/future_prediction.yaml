@@ -1,6 +1,7 @@
-name: Predictions for future
+name: Predictions Workflow
 
 on:
+  workflow_dispatch:  # Manual trigger
   push:
     branches:
       - main  # Trigger on push to the main branch
