@@ -1,3 +1,5 @@
+#Prediction code - modified
+
 import os
 import sqlite3
 import pandas as pd
@@ -63,7 +65,7 @@ def random_forest_predictions(model, X_scaled):
     return main_prediction, p5, p95
 
 def xgboost_predictions(model, X_scaled):
-   # Convert X to DMatrix format for XGBoost compatibility
+    # Convert X to DMatrix format for XGBoost compatibility
     dmatrix = xgb.DMatrix(X_scaled)
 
     # Get contributions from each tree for each sample
@@ -79,15 +81,12 @@ def xgboost_predictions(model, X_scaled):
     p95 = np.percentile(individual_predictions, 95, axis=1)
 
     main_prediction = model.predict(X_scaled)
-    # p5, p95 = extract_percentiles(all_preds)
-    # p5 = np.percentile(main_prediction, 5)
-    # p95 = np.percentile(main_prediction, 95)
     return main_prediction, p5, p95
 
 def gradient_boosting_predictions(model, X_scaled):
     n_estimators = model.n_estimators
     individual_predictions = np.zeros((X_scaled.shape[0], n_estimators))
-    
+
     # Collect predictions from each estimator
     for i in range(n_estimators):
         individual_predictions[:, i] = model.estimators_[i, 0].predict(X_scaled)
@@ -96,7 +95,7 @@ def gradient_boosting_predictions(model, X_scaled):
     p5 = np.percentile(individual_predictions, 5, axis=1)
     p95 = np.percentile(individual_predictions, 95, axis=1)
     main_prediction = model.predict(X_scaled)
-    
+
     return main_prediction, p5, p95
 
 def save_predictions_to_db(predictions_df, prediction_table_name):
@@ -111,6 +110,7 @@ def save_predictions_to_db(predictions_df, prediction_table_name):
 def process_table(table):
     df = load_data_from_table(DATA_DB, table)  # Drop rows with NaN in the DataFrame
     df = df.dropna(subset=[col for col in df.columns if col != 'target_n7d'])
+    print(df.columns)
     if 'Date' not in df.columns:
         raise KeyError("The 'Date' column is missing from the data.")
 
@@ -120,7 +120,7 @@ def process_table(table):
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    
+
     # Remove rows with NaN or inf in X_scaled, and align y_actual and dates
     X_scaled, y_actual, dates = clean_data(X_scaled, y_actual, dates)
 
@@ -130,7 +130,7 @@ def process_table(table):
         'gradient_boosting': gradient_boosting_predictions,
         'xgboost': xgboost_predictions
     }
-    
+
     # Create an empty DataFrame to store combined predictions
     combined_predictions = pd.DataFrame({'Date': dates, 'Actual': y_actual})
 
@@ -151,13 +151,46 @@ def process_table(table):
             combined_predictions[f'Predicted_{model_type}'] = main_prediction
             combined_predictions[f'5th_Percentile_{model_type}'] = p5
             combined_predictions[f'95th_Percentile_{model_type}'] = p95
-            
+
         except Exception as e:
             print(f"Error predicting with {model_type}: {e}")
 
     # Save the combined predictions DataFrame to the database
     prediction_table_name = f"prediction_{table}"
     save_predictions_to_db(combined_predictions, prediction_table_name)
+
+def sort_and_shift_tables():
+    # Connect to predictions_v1.db
+    conn = sqlite3.connect(PREDICTIONS_DB)
+    cursor = conn.cursor()
+    
+    # Get list of tables
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = [row[0] for row in cursor.fetchall()]
+
+    # For each table, sort by 'Date' and shift rows up by 7 units
+    for table in tables:
+        print(f"Processing table: {table}")
+        df = pd.read_sql_query(f"SELECT * FROM {table}", conn)
+
+        # Ensure the 'Date' column exists
+        if 'Date' not in df.columns:
+            print(f"Skipping table {table} because 'Date' column is missing.")
+            continue
+
+        # Sort by Date
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.sort_values(by='Date', ascending = False)
+
+        # Shift rows up by 7 units, keeping the 'Date' column as is
+        df_shifted = df.shift(-7)
+        df_shifted['Date'] = df['Date']  # Keep Date column unchanged
+
+        # Save the updated table back into the database
+        df_shifted.to_sql(table, conn, if_exists='replace', index=False)
+
+    conn.close()
+    print("Tables sorted and rows shifted successfully.")
 
 def main():
     download_database()
@@ -168,6 +201,9 @@ def main():
             process_table(table)
         except Exception as e:
             print(f"Error processing table {table}: {e}")
+
+    # After saving predictions, sort and shift tables in predictions_v1.db
+    sort_and_shift_tables()
 
     if os.path.exists(PREDICTIONS_DB):
         print(f"Predictions database created at: {PREDICTIONS_DB}")
