@@ -6,7 +6,7 @@ import joblib
 import numpy as np
 import xgboost as xgb
 import requests 
-
+ 
 # Paths and configurations
 DATA_DB = 'joined_data.db'
 PREDICTIONS_DB = 'future_predictions.db'
