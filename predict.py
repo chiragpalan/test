@@ -109,7 +109,8 @@ def save_predictions_to_db(predictions_df, prediction_table_name):
         print(f"Error while saving to database: {e}")
 
 def process_table(table):
-    df = load_data_from_table(DATA_DB, table).dropna()  # Drop rows with NaN in the DataFrame
+    df = load_data_from_table(DATA_DB, table)  # Drop rows with NaN in the DataFrame
+    df = df.dropna(subset=[col for col in df.columns if col != 'target_n7d'])
     if 'Date' not in df.columns:
         raise KeyError("The 'Date' column is missing from the data.")
 
